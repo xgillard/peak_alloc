@@ -104,6 +104,10 @@ impl PeakAlloc {
     pub fn peak_usage_as_gb(&self) -> f32 {
         Self::gb(self.peak_usage())
     }
+    /// Resets the peak usage to the value currently in memory
+    pub fn reset_peak_usage(&self) {
+        PEAK.store(CURRENT.load(Ordering::SeqCst), Ordering::SeqCst);
+    }
     /// Performs the bytes to kilobytes conversion
     fn kb(x: usize) -> f32 {
         x as f32 / 1024.0
