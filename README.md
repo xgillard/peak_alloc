@@ -21,7 +21,7 @@ section.
 
 ```toml
 [dependencies]
-peak_alloc = "0.1.0"
+peak_alloc = "0.2.0"
 ```
 
 Then in your main code, you will simply use it as shown below:
