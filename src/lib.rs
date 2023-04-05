@@ -67,12 +67,12 @@ pub struct PeakAlloc;
 impl PeakAlloc {
     /// Returns the number of bytes that are currently allocated to the process
     pub fn current_usage(&self) -> usize {
-        CURRENT.load(Ordering::SeqCst)
+        CURRENT.load(Ordering::Relaxed)
     }
     /// Returns the maximum number of bytes that have been allocated to the
     /// process over the course of its life.
     pub fn peak_usage(&self) -> usize {
-        PEAK.load(Ordering::SeqCst)
+        PEAK.load(Ordering::Relaxed)
     }
     /// Returns the amount of memory (in kb) that is currently allocated
     /// to the process.
@@ -106,7 +106,7 @@ impl PeakAlloc {
     }
     /// Resets the peak usage to the value currently in memory
     pub fn reset_peak_usage(&self) {
-        PEAK.store(CURRENT.load(Ordering::SeqCst), Ordering::SeqCst);
+        PEAK.store(CURRENT.load(Ordering::Acquire), Ordering::Release);
     }
     /// Performs the bytes to kilobytes conversion
     fn kb(x: usize) -> f32 {
@@ -130,14 +130,14 @@ unsafe impl GlobalAlloc for PeakAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let ret = System.alloc(layout);
         if !ret.is_null() {
-            CURRENT.fetch_add(layout.size(), Ordering::SeqCst);
-            PEAK.fetch_max(CURRENT.load(Ordering::SeqCst), Ordering::SeqCst);
+            let curr = CURRENT.fetch_add(layout.size(), Ordering::AcqRel);
+            PEAK.fetch_max(curr, Ordering::AcqRel);
         }
         ret
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         System.dealloc(ptr, layout);
-        CURRENT.fetch_sub(layout.size(), Ordering::SeqCst);
+        CURRENT.fetch_sub(layout.size(), Ordering::AcqRel);
     }
 }
