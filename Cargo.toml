@@ -7,7 +7,7 @@ description = "An allocator to keep track of (the max) allocated memory"
 repository  = "https://github.com/xgillard/peak_alloc"
 readme      = "README.md"
 license     = "MIT"
-keywords    = ["memory usage", "peak memory", "allocator"]
+keywords    = ["memory-usage", "peak-memory", "allocator"]
 categories  = ["memory-management"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
