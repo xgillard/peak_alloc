@@ -130,7 +130,8 @@ unsafe impl GlobalAlloc for PeakAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let ret = System.alloc(layout);
         if !ret.is_null() {
-            let curr = CURRENT.fetch_add(layout.size(), Ordering::AcqRel);
+            CURRENT.fetch_add(layout.size(), Ordering::AcqRel);
+            let curr = CURRENT.load(Ordering::Acquire);
             PEAK.fetch_max(curr, Ordering::AcqRel);
         }
         ret
