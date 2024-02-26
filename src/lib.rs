@@ -29,7 +29,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 static CURRENT: AtomicUsize = AtomicUsize::new(0);
 /// This atomic counter monitors the maximum amount of memory (in bytes) that
 /// has been allocated for this process over the course of its life.
-static PEAK   : AtomicUsize = AtomicUsize::new(0);
+static PEAK: AtomicUsize = AtomicUsize::new(0);
 
 /// This structure implements a dead simple low-overhead wrapper around the
 /// system allocator. It lets a program know its own memory and peak memory
@@ -124,7 +124,7 @@ impl PeakAlloc {
 
 /// PeakAlloc only implements the minimum required set of methods to make it
 /// useable as a global allocator (with `#[global_allocator]` attribute).
-/// 
+///
 /// No funky stuff is done below.
 unsafe impl GlobalAlloc for PeakAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
