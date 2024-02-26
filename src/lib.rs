@@ -130,8 +130,9 @@ unsafe impl GlobalAlloc for PeakAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let ret = System.alloc(layout);
         if !ret.is_null() {
-            let curr = CURRENT.fetch_add(layout.size(), Ordering::Relaxed) + layout.size();
-            PEAK.fetch_max(curr, Ordering::Relaxed);
+            // as pointed out by @luxalpa, fetch_add returns the PREVIOUS value.
+            let prev = CURRENT.fetch_add(layout.size(), Ordering::Relaxed);
+            PEAK.fetch_max(prev + layout.size(), Ordering::Relaxed);
         }
         ret
     }
@@ -139,5 +140,45 @@ unsafe impl GlobalAlloc for PeakAlloc {
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         System.dealloc(ptr, layout);
         CURRENT.fetch_sub(layout.size(), Ordering::Relaxed);
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::{CURRENT, PEAK};
+
+    #[global_allocator]
+    static PEAK_ALLOC: crate::PeakAlloc = crate::PeakAlloc;
+
+    #[test]
+    fn test_issue_4() {
+        // neutralize process allocated memory etc.. (makes it easier to reason about)
+        CURRENT.store(0, std::sync::atomic::Ordering::Relaxed);
+        PEAK.store   (0, std::sync::atomic::Ordering::Relaxed);
+
+        // initially both 
+        assert_eq!(0, PEAK_ALLOC.current_usage());
+        assert_eq!(0, PEAK_ALLOC.peak_usage());
+
+        // make one allocation:
+        {
+            let mut data = vec![0_u32; 1000];
+
+            assert_eq!(4000, PEAK_ALLOC.current_usage());
+            assert_eq!(4000, PEAK_ALLOC.peak_usage());     // before the fix, this would fail
+
+            let mut tot = 0;
+            for (i, x) in data.iter_mut().enumerate() {
+                *x   = i as u32;
+                tot += i as u32;
+            }
+
+            assert_eq!(tot, data.iter().sum::<u32>());
+            // drop the allocated data
+        }
+
+        assert_eq!(0,    PEAK_ALLOC.current_usage());
+        assert_eq!(4000, PEAK_ALLOC.peak_usage());
     }
 }
