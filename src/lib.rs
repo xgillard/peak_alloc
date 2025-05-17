@@ -120,6 +120,16 @@ impl PeakAlloc {
     fn gb(x: usize) -> f32 {
         x as f32 / (1024.0 * 1024.0 * 1024.0)
     }
+
+    fn add_memory(&self, size: usize) {
+        // as pointed out by @luxalpa, fetch_add returns the PREVIOUS value.
+        let prev = CURRENT.fetch_add(size, Ordering::Relaxed);
+        PEAK.fetch_max(prev + size, Ordering::Relaxed);
+    }
+
+    fn sub_memory(&self, size: usize) {
+        CURRENT.fetch_sub(size, Ordering::Relaxed);
+    }
 }
 
 /// PeakAlloc only implements the minimum required set of methods to make it
@@ -130,19 +140,53 @@ unsafe impl GlobalAlloc for PeakAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let ret = System.alloc(layout);
         if !ret.is_null() {
-            // as pointed out by @luxalpa, fetch_add returns the PREVIOUS value.
-            let prev = CURRENT.fetch_add(layout.size(), Ordering::Relaxed);
-            PEAK.fetch_max(prev + layout.size(), Ordering::Relaxed);
+            self.add_memory(layout.size())
         }
         ret
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         System.dealloc(ptr, layout);
-        CURRENT.fetch_sub(layout.size(), Ordering::Relaxed);
+        self.sub_memory(layout.size());
+    }
+
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        let size = layout.size();
+
+        // SAFETY: the safety contract for `alloc` must be upheld by the caller.
+        let ret = System.alloc(layout);
+        if !ret.is_null() {
+            self.add_memory(size);
+
+            // SAFETY: as allocation succeeded, the region from `ptr`
+            // of size `size` is guaranteed to be valid for writes.
+            std::ptr::write_bytes(ret, 0, size);
+        }
+        ret
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        let size = layout.size();
+
+        // SAFETY: the caller must ensure that the `new_size` does not overflow.
+        // `layout.align()` comes from a `Layout` and is thus guaranteed to be valid.
+        let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
+
+        // SAFETY: the caller must ensure that `new_layout` is greater than zero.
+        let new_ptr = System.alloc(new_layout);
+        if !new_ptr.is_null() {
+            self.add_memory(new_size);
+
+            // SAFETY: the previously allocated block cannot overlap the newly allocated block.
+            // The safety contract for `dealloc` must be upheld by the caller.
+            std::ptr::copy_nonoverlapping(ptr, new_ptr, std::cmp::min(size, new_size));
+
+            System.dealloc(ptr, layout);
+            self.sub_memory(size);
+        }
+        new_ptr
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -157,7 +201,7 @@ mod tests {
         CURRENT.store(0, std::sync::atomic::Ordering::Relaxed);
         PEAK.store   (0, std::sync::atomic::Ordering::Relaxed);
 
-        // initially both 
+        // initially both
         assert_eq!(0, PEAK_ALLOC.current_usage());
         assert_eq!(0, PEAK_ALLOC.peak_usage());
 
