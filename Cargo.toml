@@ -1,6 +1,6 @@
 [package]
 name        = "peak_alloc"
-version     = "0.3.0"
+version     = "0.3.1"
 authors     = ["Xavier Gillard <xavier.gillard@uclouvain.be>"]
 edition     = "2018"
 description = "An allocator to keep track of (the max) allocated memory"
